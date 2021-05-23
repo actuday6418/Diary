@@ -1,36 +1,35 @@
 use chrono::prelude::*;
 use std::convert::TryInto;
-use std::io::{Seek, SeekFrom, Write};
 use std::fs::OpenOptions;
+use std::io::{Seek, SeekFrom, Write};
 #[macro_use]
 extern crate magic_crypt;
 
 use magic_crypt::MagicCryptTrait;
 use serde::{Deserialize, Serialize};
-use std::sync::mpsc::TryRecvError;
 use std::thread;
 use termion::{input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
     backend::TermionBackend,
-    layout::{ Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout},
     widgets::Clear,
     Terminal,
 };
 
-mod ui;
 mod input;
 mod popup;
+mod ui;
 
 #[derive(Serialize, Deserialize)]
 pub struct Entry {
     pub year: u64,
     pub month: u64,
     pub date: u64,
-    pub content: String,
+    pub content: Vec<u8>,
 }
 
 impl Entry {
-    pub fn new(date: u64, month: u64, year: u64, content: String) -> Self {
+    pub fn new(date: u64, month: u64, year: u64, content: Vec<u8>) -> Self {
         Self {
             year: year,
             month: month,
@@ -40,12 +39,10 @@ impl Entry {
     }
 }
 
-pub fn append_entry() {
+pub fn append_entry(content: String) {
     let date = Local::today();
-    let mut content = String::new();
-    std::io::stdin().read_line(&mut content).unwrap();
     let key = new_magic_crypt!("passwordgoeshere!", 256);
-    let content = key.encrypt_str_to_base64(content);
+    let content = key.encrypt_str_to_bytes(content);
     let content = Entry::new(
         date.day().try_into().unwrap(),
         date.month().try_into().unwrap(),
@@ -102,7 +99,7 @@ pub fn gen_page() {
                 entry.date,
                 entry.month,
                 entry.year,
-                key.decrypt_base64_to_string(entry.content.clone()).unwrap()
+                std::str::from_utf8(key.decrypt_bytes_to_bytes(&entry.content.clone()).unwrap().as_slice()).unwrap()
             )
             .as_str(),
         )
@@ -120,14 +117,30 @@ fn main() {
     let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend).unwrap();
+    let stdin_channel = input::spawn_stdin_channel();
+    let mut update_ui = true;
+
+    'main: loop {
+        match stdin_channel.try_recv() {
+            Ok(input::Data::Char(c)) => {
+                curr_text.push(c);
+                update_ui = true;
+            }
+            Ok(input::Data::Command(input::SignalType::Close)) => {
+                return;
+            }
+            Ok(input::Data::Command(input::SignalType::Go)) => {
+                state = input::State::AddingFile;
+                append_entry(curr_text.clone());
+                curr_text.clear();
+            }
+            _ => {}
+        }
+        if update_ui {
+            update_ui = false;
             terminal
                 .draw(|f| {
-                    let widget_main =
-                        ui::build_main("welkdm");
-                    let chunks = Layout::default()
-                        .direction(Direction::Horizontal)
-                        .constraints([Constraint::Percentage(100)])
-                        .split(f.size());
+                    let widget_main = ui::build_main("welkdm");
                     f.render_widget(widget_main, f.size());
                     if state == input::State::AddingText {
                         let popup = popup::centered_rect(90, 90, f.size());
@@ -138,6 +151,13 @@ fn main() {
                     }
                 })
                 .unwrap();
-  append_entry();
-  gen_page();
+        }
+        thread::sleep(std::time::Duration::from_millis(20));
+    }
+    //append_entry();
+    //gen_page();
 }
+
+// fn main() {
+// append_entry();
+// }
