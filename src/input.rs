@@ -9,6 +9,7 @@ pub enum SignalType {
     Close,
     Go,
     BackSpace,
+    Cancel,
 }
 
 pub enum Data {
@@ -20,6 +21,7 @@ pub enum Data {
 pub enum State {
     AddingText,
     AddingFile,
+    Popup,
 }
 
 pub fn spawn_stdin_channel() -> Receiver<Data> {
@@ -39,6 +41,7 @@ pub fn spawn_stdin_channel() -> Receiver<Data> {
                     }
                     Key::Char(x) => tx.send(Data::Char(x)).unwrap(),
                     Key::Backspace => tx.send(Data::Command(SignalType::BackSpace)).unwrap(),
+                    Key::Esc => tx.send(Data::Command(SignalType::Cancel)).unwrap(),
                     _ => {}
                 },
                 _ => match c.unwrap() {
@@ -48,6 +51,11 @@ pub fn spawn_stdin_channel() -> Receiver<Data> {
                     Key::Backspace => tx.send(Data::Command(SignalType::BackSpace)).unwrap(),
                     Key::Char(x) => tx.send(Data::Char(x)).unwrap(),
                     Key::Ctrl('c') => tx.send(Data::Command(SignalType::Close)).unwrap(),
+                    Key::Esc => tx.send(Data::Command(SignalType::Cancel)).unwrap(),
+                    Key::Alt('n') => {
+                        input_mode = State::AddingFile;
+                        tx.send(Data::Command(SignalType::Go)).unwrap();
+                    }
                     _ => {}
                 },
             }

@@ -1,7 +1,7 @@
 use chrono::prelude::*;
 use std::convert::TryInto;
 use std::fs::OpenOptions;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 #[macro_use]
 extern crate magic_crypt;
 
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::thread;
 use termion::{input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{backend::TermionBackend, widgets::Clear, Terminal};
+use uuid;
 
 mod input;
 mod popup;
@@ -21,20 +22,22 @@ pub struct Entry {
     pub month: u64,
     pub date: u64,
     pub content: Vec<u8>,
+    pub files: Vec<Vec<u8>>,
 }
 
 impl Entry {
-    pub fn new(date: u64, month: u64, year: u64, content: Vec<u8>) -> Self {
+    pub fn new(date: u64, month: u64, year: u64, content: Vec<u8>, files: Vec<Vec<u8>>) -> Self {
         Self {
             year: year,
             month: month,
             date: date,
             content: content,
+            files: files,
         }
     }
 }
 
-pub fn append_entry(content: String) {
+pub fn append_entry(content: String, files: Vec<Vec<u8>>) {
     let date = Local::today();
     let key = new_magic_crypt!("passwordgoeshere!", 256);
     let content = key.encrypt_str_to_bytes(content);
@@ -43,6 +46,7 @@ pub fn append_entry(content: String) {
         date.month().try_into().unwrap(),
         date.year().try_into().unwrap(),
         content,
+        files,
     );
     let content = serde_json::to_string(&content).unwrap();
     match OpenOptions::new()
@@ -115,7 +119,17 @@ pub fn gen_page() {
                         .unwrap()
                     )
                     .as_str(),
-                )
+                );
+                entry.files.iter().for_each(|x| {
+                    let mut temp_dir = std::env::temp_dir();
+                    let file_name = uuid::Uuid::new_v4();
+                    temp_dir.push(file_name.to_string());
+                    let mut file = std::fs::File::create(temp_dir.clone()).unwrap();
+                    file.write_all(x).unwrap();
+                    html_page.push_str("<img src=");
+                    html_page.push_str(temp_dir.to_str().unwrap());
+                    html_page.push_str(">");
+                });
             });
             html_page.push_str("</div></body></html>");
             let mut html_file = std::fs::File::create("index.html").unwrap();
@@ -134,7 +148,10 @@ fn main() {
         gen_page();
     } else {
         let mut state = input::State::AddingText;
-        let mut curr_text = String::new();
+        let mut buffer = String::new();
+        buffer.push('\u{2016}');
+        let mut content_text = String::from("Null");
+        let mut curr_files: Vec<Vec<u8>> = Vec::new();
         let stdout = std::io::stdout().into_raw_mode().unwrap();
         let stdout = MouseTerminal::from(stdout);
         let stdout = AlternateScreen::from(stdout);
@@ -146,41 +163,78 @@ fn main() {
         'main: loop {
             match stdin_channel.try_recv() {
                 Ok(input::Data::Char(c)) => {
-                    curr_text.pop();
-                    curr_text.push(c);
-                    curr_text.push('\u{2016}');
-                    update_ui = true;
+                    if state == input::State::AddingFile || state == input::State::AddingText {
+                        buffer.pop();
+                        buffer.push(c);
+                        buffer.push('\u{2016}');
+                        update_ui = true;
+                    }
                 }
                 Ok(input::Data::Command(input::SignalType::Close)) => {
                     break 'main;
                 }
                 Ok(input::Data::Command(input::SignalType::Go)) => {
-                    state = input::State::AddingFile;
-                    append_entry(curr_text.clone());
-                    curr_text.clear();
-                    update_ui = true;
+                    if state == input::State::AddingText {
+                      buffer.pop();
+                        state = input::State::AddingFile;
+                        //append_entry(buffer.clone(), curr_files.clone());
+                        content_text = buffer.clone();
+                        buffer.clear();
+                        update_ui = true;
+                    } else if state == input::State::AddingFile {
+                      buffer.pop();
+                        match std::fs::File::open(buffer.clone()) {
+                            Ok(mut file) => {
+                                let mut v = Vec::new();
+                                file.read_to_end(&mut v).unwrap();
+                                curr_files.push(v);
+                            }
+                            Err(_) => {
+                                buffer = String::from(format!("{}: File not found!", buffer));
+                                state = input::State::Popup;
+                                update_ui = true;
+                            }
+                        }
+                    }
                 }
                 Ok(input::Data::Command(input::SignalType::BackSpace)) => {
-                    curr_text.pop();
-                    curr_text.pop();
-                    curr_text.push('\u{2016}');
-                    update_ui = true;
+                    if state == input::State::AddingFile || state == input::State::AddingText {
+                        buffer.pop();
+                        buffer.pop();
+                        buffer.push('\u{2016}');
+                        update_ui = true;
+                    }
+                }
+                Ok(input::Data::Command(input::SignalType::Cancel)) => {
+                    if state == input::State::AddingFile {
+                        append_entry(content_text.clone(), curr_files.clone());
+                        break 'main;
+                    } else if state == input::State::Popup {
+                        state = input::State::AddingFile;
+                        update_ui = true;
+                        buffer.clear();
+                    }
                 }
                 _ => {}
             }
             if update_ui {
                 update_ui = false;
                 terminal
-                    .draw(|f| {
-                        if state == input::State::AddingFile {
-                            let popup = popup::centered_rect(90, 90, f.size());
+                    .draw(|f| match state {
+                        input::State::AddingText => {
+                            let widget_main = ui::build_main(buffer.as_str());
+                            f.render_widget(widget_main, f.size());
+                        }
+                        input::State::AddingFile => {
+                            let widget = ui::build_file_input(buffer.as_str());
+                            f.render_widget(widget, f.size());
+                        }
+                        input::State::Popup => {
+                            let popup = popup::centered_rect(40, 10, f.size());
 
-                            let widget_input = ui::build_input(curr_text.clone());
+                            let widget_input = ui::build_message(buffer.as_str());
                             f.render_widget(Clear, popup);
                             f.render_widget(widget_input, popup);
-                        } else {
-                            let widget_main = ui::build_main(curr_text.as_str());
-                            f.render_widget(widget_main, f.size());
                         }
                     })
                     .unwrap();

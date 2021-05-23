@@ -18,14 +18,30 @@ pub fn build_main(content: &str) -> Paragraph {
         .wrap(Wrap { trim: false })
 }
 
-pub fn build_input(content: String) -> Paragraph<'static> {
+pub fn build_file_input(content: &str) -> Paragraph {
     Paragraph::new(content)
         .style(Style::default())
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .style(Style::default())
-                .title(Span::styled("Enter your URI/URL here", Style::default())),
+                .title(Span::styled(
+                    "Enter the file directory here (Esc to cancel)",
+                    Style::default(),
+                )),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false })
+}
+
+pub fn build_message(content: &str) -> Paragraph {
+    Paragraph::new(content)
+        .style(Style::default())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default())
+                .title(Span::styled("Alert (Esc to go back)", Style::default())),
         )
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false })
