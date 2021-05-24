@@ -15,6 +15,7 @@ use uuid;
 mod input;
 mod popup;
 mod ui;
+use bincode;
 
 #[derive(Serialize, Deserialize)]
 pub struct Entry {
@@ -48,7 +49,7 @@ pub fn append_entry(content: String, files: Vec<Vec<u8>>) {
         content,
         files,
     );
-    let content = serde_json::to_string(&content).unwrap();
+    let content = bincode::serialize(&content).unwrap();
     match OpenOptions::new()
         .write(true)
         .create(false)
@@ -56,7 +57,7 @@ pub fn append_entry(content: String, files: Vec<Vec<u8>>) {
     {
         Ok(mut file) => {
             file.seek(SeekFrom::End(0)).unwrap();
-            file.write(content.as_bytes()).unwrap();
+            file.write(content.as_slice()).unwrap();
         }
         Err(_) => {
             let mut file = OpenOptions::new()
@@ -65,32 +66,49 @@ pub fn append_entry(content: String, files: Vec<Vec<u8>>) {
                 .open("database.json")
                 .unwrap();
             file.seek(SeekFrom::End(0)).unwrap();
-            file.write(content.as_bytes()).unwrap();
+            file.write(content.as_slice()).unwrap();
         }
     }
 }
 
 pub fn gen_page() {
-    let mut html_page = "<html><head><style>
+    let mut html_page = "<html>
+<meta charset=\"UTF-8\">
+    <head><style>
 .header {
   padding: 5px;
   border-radius: 20px; 
   text-align: center;
   background: #1abc9c;
-  color: white;
+  color: #D3FFED;
   font-size: 35px;
+  box-shadow: 0px 0px 5px 2px #092E13;
 }
 .entries {
   padding: 30px;
   border-radius: 20px;
   text-align: center;
-  background: #1abcfa;
-  color: white;
+  background: #2BA67B;
+  color: #D3FFED;
   font-size: 25px;
+  box-shadow: 0px 0px 5px 2px #092E13;
+}
+.image {
+  display: block;
+  border: 5px;
+  border-color: #D3FFED;
+  border-style: solid;
+  border-radius: 20px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 99%;
+}
+body {
+  background-color: #175942;
 }
 </style><body><div class=\"header\">
         <h2>My Diary<h2>
-</div> <br><br> <div class=\"entries\">"
+</div> <br><br>"
         .to_owned();
     match OpenOptions::new()
         .write(false)
@@ -98,16 +116,17 @@ pub fn gen_page() {
         .create(false)
         .open("database.json")
     {
-        Ok(file) => {
+        Ok(mut file) => {
+            let mut bf = std::io::BufReader::new(&mut file);
             let key = new_magic_crypt!("passwordgoeshere!", 256);
-            let entries = serde_json::Deserializer::from_reader(file)
-                .into_iter::<serde_json::Value>()
-                .map(|x| serde_json::from_value::<Entry>(x.unwrap()).unwrap())
-                .collect::<Vec<Entry>>();
-            entries.iter().for_each(|entry| {
+            let mut entries = Vec::new();
+            while let Ok(entry) = bincode::deserialize_from(&mut bf) {
+              entries.push(entry);
+            };
+            entries.iter().for_each(|entry: &Entry| {
                 html_page.push_str(
                     format!(
-                        "<br> <h1><b> {}/{}/{} </b></h1> <br> {} <br>",
+                        "<div class=\"entries\"><br> <h1><b> {}/{}/{} </b></h1> <br> {} <br><br><br><br>",
                         entry.date,
                         entry.month,
                         entry.year,
@@ -128,16 +147,18 @@ pub fn gen_page() {
                     file.write_all(x).unwrap();
                     html_page.push_str("<img src=");
                     html_page.push_str(temp_dir.to_str().unwrap());
-                    html_page.push_str(">");
+                    html_page.push_str(" class=\"image\">");
                 });
+                html_page.push_str("</div><br>");
             });
-            html_page.push_str("</div></body></html>");
-            let mut html_file = std::fs::File::create("index.html").unwrap();
+            html_page.push_str("</body></html>");
+            let mut html_file = std::env::temp_dir();
+            html_file.push("index.html");
+            let mut html_file = std::fs::File::create(html_file).unwrap();
             html_file.write(html_page.as_bytes()).unwrap();
         }
         Err(e) => {
-            println!("{}: looping", e);
-            loop {}
+            panic!("{}: No database found. Expected database.json", e);
         }
     }
 }
@@ -188,6 +209,8 @@ fn main() {
                                 let mut v = Vec::new();
                                 file.read_to_end(&mut v).unwrap();
                                 curr_files.push(v);
+                                buffer.clear();
+                                update_ui = true;
                             }
                             Err(_) => {
                                 buffer = String::from(format!("{}: File not found!", buffer));
