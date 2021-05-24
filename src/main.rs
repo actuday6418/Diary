@@ -18,16 +18,23 @@ mod ui;
 use bincode;
 
 #[derive(Serialize, Deserialize)]
+pub struct File {
+    data: Vec<u8>,
+    description: String,
+    f_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Entry {
     pub year: u64,
     pub month: u64,
     pub date: u64,
     pub content: Vec<u8>,
-    pub files: Vec<Vec<u8>>,
+    pub files: Vec<File>,
 }
 
 impl Entry {
-    pub fn new(date: u64, month: u64, year: u64, content: Vec<u8>, files: Vec<Vec<u8>>) -> Self {
+    pub fn new(date: u64, month: u64, year: u64, content: Vec<u8>, files: Vec<File>) -> Self {
         Self {
             year: year,
             month: month,
@@ -38,7 +45,7 @@ impl Entry {
     }
 }
 
-pub fn append_entry(content: String, files: Vec<Vec<u8>>) {
+pub fn append_entry(content: String, files: Vec<File>) {
     let date = Local::today();
     let key = new_magic_crypt!("passwordgoeshere!", 256);
     let content = key.encrypt_str_to_bytes(content);
@@ -82,7 +89,7 @@ pub fn gen_page() {
   background: #1abc9c;
   color: #D3FFED;
   font-size: 35px;
-  box-shadow: 0px 0px 5px 2px #092E13;
+  box-shadow: 0px 0px 30px 1px #092E13;
 }
 .entries {
   padding: 30px;
@@ -91,7 +98,7 @@ pub fn gen_page() {
   background: #2BA67B;
   color: #D3FFED;
   font-size: 25px;
-  box-shadow: 0px 0px 5px 2px #092E13;
+  box-shadow: 0px 0px 30px 1px #092E13;
 }
 .image {
   display: block;
@@ -102,6 +109,29 @@ pub fn gen_page() {
   margin-left: auto;
   margin-right: auto;
   width: 99%;
+  box-shadow: 0px 0px 30px 1px #092E13;
+  transition: 0.3s;
+}
+.image:hover {
+  border-color: white;
+}
+.downloader {
+  border: 5px;
+  padding: 10px;
+  color: #D3FFED;
+  border-style: solid;
+  border-color: #D3FFED;
+  border-radius: 20px;
+  margin-right: 200px;
+  margin-left: 200px;
+  transition: 0.3s;
+  box-shadow: 0px 0px 30px 1px #092E13;
+}
+.downloader:hover {
+  color: white;
+  border-color: white;
+  margin-left: 190px;
+  margin-right: 190px;
 }
 body {
   background-color: #175942;
@@ -121,8 +151,8 @@ body {
             let key = new_magic_crypt!("passwordgoeshere!", 256);
             let mut entries = Vec::new();
             while let Ok(entry) = bincode::deserialize_from(&mut bf) {
-              entries.push(entry);
-            };
+                entries.push(entry);
+            }
             entries.iter().for_each(|entry: &Entry| {
                 html_page.push_str(
                     format!(
@@ -144,10 +174,12 @@ body {
                     let file_name = uuid::Uuid::new_v4();
                     temp_dir.push(file_name.to_string());
                     let mut file = std::fs::File::create(temp_dir.clone()).unwrap();
-                    file.write_all(x).unwrap();
-                    html_page.push_str("<img src=");
-                    html_page.push_str(temp_dir.to_str().unwrap());
-                    html_page.push_str(" class=\"image\">");
+                    file.write_all(x.data.as_slice()).unwrap();
+                    if x.f_type == String::from("image") {
+                        html_page.push_str(format!("<img src=\"{}\" class=\"image\">", temp_dir.to_str().unwrap()).as_str());
+                    } else {
+                        html_page.push_str(format!("<a href=\"{}\" style=\"text-decoration: none\" download><p class = \"downloader\">Download: {}</p></a>", temp_dir.to_str().unwrap(), x.description).as_str());
+                    }
                 });
                 html_page.push_str("</div><br>");
             });
@@ -172,7 +204,7 @@ fn main() {
         let mut buffer = String::new();
         buffer.push('\u{2016}');
         let mut content_text = String::from("Null");
-        let mut curr_files: Vec<Vec<u8>> = Vec::new();
+        let mut curr_files: Vec<File> = Vec::new();
         let stdout = std::io::stdout().into_raw_mode().unwrap();
         let stdout = MouseTerminal::from(stdout);
         let stdout = AlternateScreen::from(stdout);
@@ -196,19 +228,38 @@ fn main() {
                 }
                 Ok(input::Data::Command(input::SignalType::Go)) => {
                     if state == input::State::AddingText {
-                      buffer.pop();
+                        buffer.pop();
                         state = input::State::AddingFile;
                         //append_entry(buffer.clone(), curr_files.clone());
                         content_text = buffer.clone();
                         buffer.clear();
                         update_ui = true;
                     } else if state == input::State::AddingFile {
-                      buffer.pop();
+                        buffer.pop();
                         match std::fs::File::open(buffer.clone()) {
                             Ok(mut file) => {
-                                let mut v = Vec::new();
-                                file.read_to_end(&mut v).unwrap();
-                                curr_files.push(v);
+                                let mut buff = Vec::new();
+                                let f_type: String;
+                                let desc: String = buffer.split('/').last().unwrap().to_string();
+                                if buffer.ends_with(".png")
+                                    || buffer.ends_with(".apng")
+                                    || buffer.ends_with(".gif")
+                                    || buffer.ends_with(".jpeg")
+                                    || buffer.ends_with(".jpg")
+                                    || buffer.ends_with(".svg")
+                                    || buffer.ends_with(".webp")
+                                    || buffer.ends_with(".avif")
+                                {
+                                    f_type = String::from("image");
+                                } else {
+                                    f_type = String::from("file");
+                                }
+                                file.read_to_end(&mut buff).unwrap();
+                                curr_files.push(File {
+                                    data: buff,
+                                    description: desc,
+                                    f_type: f_type,
+                                });
                                 buffer.clear();
                                 update_ui = true;
                             }
@@ -230,7 +281,7 @@ fn main() {
                 }
                 Ok(input::Data::Command(input::SignalType::Cancel)) => {
                     if state == input::State::AddingFile {
-                        append_entry(content_text.clone(), curr_files.clone());
+                        append_entry(content_text.clone(), curr_files);
                         break 'main;
                     } else if state == input::State::Popup {
                         state = input::State::AddingFile;
