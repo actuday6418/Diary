@@ -1,11 +1,14 @@
-# Diary
+# Diary [![Latest version]][crates.io]
 Encrypted memories
 
 [Latest Version]: https://img.shields.io/crates/v/diary.svg
 [crates.io]: https://crates.io/crates/serde
 
-# Usage 
+# Install
+```cargo install diary```
 
+# Usage 
+```
 USAGE:
     diary [FLAGS] [OPTIONS] --password <password>
 
@@ -17,7 +20,8 @@ FLAGS:
 OPTIONS:
     -d, --database <database>    This is the location of the database file. [default: .database]
     -p, --password <password>    This is the password to the database.
-  
+```
+
 ## To make an entry
 1. Run the program with the password and optionally the database options. 
 2. On the first screen, enter the day's diary entry. The date and day will be added by Diary. 
