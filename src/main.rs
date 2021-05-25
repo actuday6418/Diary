@@ -16,7 +16,7 @@ mod ui;
 use clap::{App, Arg};
 
 fn main() {
-    let matches = App::new("Diary").version("0.1.0")
+    let matches = App::new("Diary").version("0.1.1")
       .arg(Arg::with_name("password").short("p").long("password").required(true).takes_value(true).help("This is the password to the database."))
       .arg(Arg::with_name("database").short("d").long("database").default_value(".database").takes_value(true).help("This is the location of the database file."))
       .arg(Arg::with_name("generate-page").long("generate-page").short("g").help("Assert this flag if you want the diary to built into an html file stored at $TEMPDIR.")).get_matches();

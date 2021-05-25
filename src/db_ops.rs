@@ -42,6 +42,32 @@ impl Entry {
     }
 }
 
+fn get_month(month_no: u64) -> String {
+    String::from(match month_no {
+        1 => "January",
+        2 => "February",
+        3 => "March",
+        4 => "April",
+        5 => "May",
+        6 => "June",
+        7 => "July",
+        8 => "August",
+        9 => "September",
+        10 => "October",
+        11 => "November",
+        _ => "December",
+    })
+}
+
+fn get_date_suffix(date: u64) -> String {
+  String::from(match date {
+    1 => "st",
+    2 => "nd",
+    3 => "rd",
+    _ => "th"
+  })
+}
+
 pub fn append_entry(content: String, files: Vec<File>, file: &mut std::fs::File, password: &str) {
     let date = Local::today();
     let key = new_magic_crypt!(password, 128);
@@ -165,9 +191,11 @@ body {
             entries.iter().for_each(|entry: &Entry| {
                 html_page.push_str(
                     format!(
-                        "<div class=\"entries\"><br> <h1><b> {}/{}/{} </b></h1> <br> {} <br><br><br><br>",
+                        "<div class=\"entries\"><br> <h1><b> {:?}, {}{} {}, {} </b></h1> <br> {} <br><br><br><br>",
+                        NaiveDate::from_ymd(entry.year as i32, entry.month as u32, entry.date as u32).weekday(),
                         entry.date,
-                        entry.month,
+                        get_date_suffix(entry.date),
+                        get_month(entry.month),
                         entry.year,
                         std::str::from_utf8(
                             key.decrypt_bytes_to_bytes(&entry.content.clone())
