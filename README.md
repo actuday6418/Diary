@@ -44,3 +44,7 @@ OPTIONS:
 1. AES-128 encryption for text and file data.
 2. TUI interface without sacrificing functionality or usability
 3. Decrypts the whole database only when required (```-g``` flag), and into rich HTML5.
+
+# Running
+
+https://user-images.githubusercontent.com/56124831/119493025-5d5efd00-bd7d-11eb-93bf-3178bf35d821.mp4
