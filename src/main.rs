@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::io::{Read};
+use std::io::Read;
 #[macro_use]
 extern crate magic_crypt;
 
@@ -8,16 +8,15 @@ use std::thread;
 use termion::{input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{backend::TermionBackend, widgets::Clear, Terminal};
 
+mod db_ops;
 mod input;
 mod popup;
 mod ui;
-mod db_ops;
 
 use clap::{App, Arg};
 
-
 fn main() {
-    let matches = App::new("Diary")
+    let matches = App::new("Diary").version("0.1.0")
       .arg(Arg::with_name("password").short("p").long("password").required(true).takes_value(true).help("This is the password to the database."))
       .arg(Arg::with_name("database").short("d").long("database").default_value(".database").takes_value(true).help("This is the location of the database file."))
       .arg(Arg::with_name("generate-page").long("generate-page").short("g").help("Assert this flag if you want the diary to built into an html file stored at $TEMPDIR.")).get_matches();
@@ -48,11 +47,13 @@ fn main() {
         {
             Ok(mut file) => {
                 let verifier: Vec<u8> = bincode::deserialize_from(&mut file).unwrap();
-                let verifier = match key.decrypt_bytes_to_bytes(verifier.as_slice()){
+                let verifier = match key.decrypt_bytes_to_bytes(verifier.as_slice()) {
                     Ok(string) => string,
                     Err(_) => panic!("Wrong password!"),
                 };
-                let verifier: String = std::str::from_utf8(verifier.as_slice()).unwrap().to_string();
+                let verifier: String = std::str::from_utf8(verifier.as_slice())
+                    .unwrap()
+                    .to_string();
                 if verifier != String::from("917994806418") {
                     panic!("Incorrect password for this database! Exiting")
                 } else {
@@ -65,7 +66,11 @@ fn main() {
                     .create(true)
                     .open(database_loc)
                     .unwrap();
-                bincode::serialize_into(&mut file, &key.encrypt_str_to_bytes(String::from("917994806418"))).unwrap();
+                bincode::serialize_into(
+                    &mut file,
+                    &key.encrypt_str_to_bytes(String::from("917994806418")),
+                )
+                .unwrap();
                 file
             }
         };
@@ -146,24 +151,14 @@ fn main() {
                 }
                 Ok(input::Data::Command(input::SignalType::Cancel)) => {
                     if state == input::State::AddingFile {
-                        db_ops::append_entry(
-                            content_text.clone(),
-                            curr_files,
-                            &mut file,
-                            password,
-                        );
+                        db_ops::append_entry(content_text.clone(), curr_files, &mut file, password);
                         break 'main;
                     } else if state == input::State::Popup {
                         state = input::State::AddingFile;
                         update_ui = true;
                         buffer.clear();
                     } else if state == input::State::AddingText {
-                        db_ops::append_entry(
-                            content_text.clone(),
-                            curr_files,
-                            &mut file,
-                            password,
-                        );
+                        db_ops::append_entry(content_text.clone(), curr_files, &mut file, password);
                         break 'main;
                     }
                 }
@@ -193,5 +188,5 @@ fn main() {
             }
             thread::sleep(std::time::Duration::from_millis(20));
         }
-    } 
+    }
 }

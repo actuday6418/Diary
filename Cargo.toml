@@ -3,7 +3,12 @@ name = "diary"
 version = "0.1.0"
 authors = ["actuday6418 <actuday6418@gmail.com>"]
 edition = "2018"
-
+license = "GPL3"
+description = "A TUI based diary tool for Linux with encryption supported for files and text."
+readme = "README.md"
+repository = "https://github.com/actuday6418/Diary"
+keywords = ["diary","journal","encrypted"]
+categories = ["command-line-utilities"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

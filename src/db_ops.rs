@@ -1,10 +1,10 @@
-use chrono::prelude::*;
-use std::convert::TryInto;
-use serde::{Deserialize, Serialize};
-use std::io::{ Seek, SeekFrom, Write};
-use std::fs::OpenOptions;
-use uuid;
 use bincode;
+use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::fs::OpenOptions;
+use std::io::{Seek, SeekFrom, Write};
+use uuid;
 
 use magic_crypt::MagicCryptTrait;
 #[derive(Serialize, Deserialize)]
