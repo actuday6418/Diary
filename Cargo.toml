@@ -15,3 +15,4 @@ tui="0.14.0"
 termion="1.5"
 uuid={ version = "0.8", features = [ "v4" ] }
 bincode="*"
+clap = "*"
