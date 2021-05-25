@@ -2,7 +2,7 @@
 Encrypted memories
 
 [Latest Version]: https://img.shields.io/crates/v/diary.svg
-[crates.io]: https://crates.io/crates/serde
+[crates.io]: https://crates.io/crates/diary
 
 # Install
 ```cargo install diary```
