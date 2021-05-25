@@ -157,6 +157,14 @@ fn main() {
                         state = input::State::AddingFile;
                         update_ui = true;
                         buffer.clear();
+                    } else if state == input::State::AddingText {
+                        db_ops::append_entry(
+                            content_text.clone(),
+                            curr_files,
+                            &mut file,
+                            password,
+                        );
+                        break 'main;
                     }
                 }
                 _ => {}
