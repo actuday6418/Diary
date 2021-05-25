@@ -21,7 +21,14 @@ use bincode;
 pub struct File {
     data: Vec<u8>,
     description: String,
-    f_type: String,
+    f_type: FileType,
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+enum FileType {
+    Image,
+    Audio,
+    GenericFile,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -45,9 +52,9 @@ impl Entry {
     }
 }
 
-pub fn append_entry(content: String, files: Vec<File>) {
+pub fn append_entry(content: String, files: Vec<File>, file: &mut std::fs::File, password: &str) {
     let date = Local::today();
-    let key = new_magic_crypt!("passwordgoeshere!", 256);
+    let key = new_magic_crypt!(password, 128);
     let content = key.encrypt_str_to_bytes(content);
     let content = Entry::new(
         date.day().try_into().unwrap(),
@@ -57,28 +64,11 @@ pub fn append_entry(content: String, files: Vec<File>) {
         files,
     );
     let content = bincode::serialize(&content).unwrap();
-    match OpenOptions::new()
-        .write(true)
-        .create(false)
-        .open("database.json")
-    {
-        Ok(mut file) => {
-            file.seek(SeekFrom::End(0)).unwrap();
-            file.write(content.as_slice()).unwrap();
-        }
-        Err(_) => {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .open("database.json")
-                .unwrap();
-            file.seek(SeekFrom::End(0)).unwrap();
-            file.write(content.as_slice()).unwrap();
-        }
-    }
+    file.seek(SeekFrom::End(0)).unwrap();
+    file.write(content.as_slice()).unwrap();
 }
 
-pub fn gen_page() {
+pub fn gen_page(password: &str) {
     let mut html_page = "<html>
 <meta charset=\"UTF-8\">
     <head><style>
@@ -90,6 +80,11 @@ pub fn gen_page() {
   color: #D3FFED;
   font-size: 35px;
   box-shadow: 0px 0px 30px 1px #092E13;
+  transition: 0.3s;
+}
+.header:hover {
+  color: white;
+  box-shadow: 0px 0px 60px 1px #092E13;
 }
 .entries {
   padding: 30px;
@@ -99,6 +94,12 @@ pub fn gen_page() {
   color: #D3FFED;
   font-size: 25px;
   box-shadow: 0px 0px 30px 1px #092E13;
+  margin: 3%;
+  transition: 0.3s;
+}
+.entries:hover { 
+  color: white;
+  box-shadow: 0px 0px 60px 1px #092E13;
 }
 .image {
   display: block;
@@ -114,6 +115,7 @@ pub fn gen_page() {
 }
 .image:hover {
   border-color: white;
+  box-shadow: 0px 0px 60px 1px #092E13;
 }
 .downloader {
   border: 5px;
@@ -132,6 +134,22 @@ pub fn gen_page() {
   border-color: white;
   margin-left: 190px;
   margin-right: 190px;
+  box-shadow: 0px 0px 60px 1px #092E13;
+}
+audio {
+  border: 5px;
+  background-color: #D3FFED;
+  border-style: solid;
+  border-radius: 20px;
+  border-color: #D3FFED;
+  box-shadow: 0px 0px 30px 1px #092E13;
+  width: 50%;
+  transition: 0.3s;
+}
+audio:hover{
+  border-color: white;
+  width: 52%;
+  box-shadow: 0px 0px 60px 1px #092E13;
 }
 body {
   background-color: #175942;
@@ -148,8 +166,9 @@ body {
     {
         Ok(mut file) => {
             let mut bf = std::io::BufReader::new(&mut file);
-            let key = new_magic_crypt!("passwordgoeshere!", 256);
+            let key = new_magic_crypt!(password, 128);
             let mut entries = Vec::new();
+            let _: Vec<u8> = bincode::deserialize_from(&mut bf).unwrap();
             while let Ok(entry) = bincode::deserialize_from(&mut bf) {
                 entries.push(entry);
             }
@@ -174,11 +193,13 @@ body {
                     let file_name = uuid::Uuid::new_v4();
                     temp_dir.push(file_name.to_string());
                     let mut file = std::fs::File::create(temp_dir.clone()).unwrap();
-                    file.write_all(x.data.as_slice()).unwrap();
-                    if x.f_type == String::from("image") {
-                        html_page.push_str(format!("<img src=\"{}\" class=\"image\">", temp_dir.to_str().unwrap()).as_str());
-                    } else {
-                        html_page.push_str(format!("<a href=\"{}\" style=\"text-decoration: none\" download><p class = \"downloader\">Download: {}</p></a>", temp_dir.to_str().unwrap(), x.description).as_str());
+                    file.write_all(key.decrypt_bytes_to_bytes(x.data.as_slice()).unwrap().as_slice()).unwrap();
+                    if x.f_type == FileType::Image {
+                        html_page.push_str(format!("<img src=\"{}\" class=\"image\"><br>", temp_dir.to_str().unwrap()).as_str());
+                    } else if x.f_type == FileType::Audio {
+                        html_page.push_str(format!("<audio controls src=\"{}\">Audio playback not supported by this browser! File: {}</audio><br>", temp_dir.to_str().unwrap(), x.description).as_str());
+                    } else if x.f_type == FileType::GenericFile {
+                        html_page.push_str(format!("<a href=\"{}\" style=\"text-decoration: none\" download=\"{}\"><p class = \"downloader\">Download: {}</p></a><br>", temp_dir.to_str().unwrap(),x.description, x.description).as_str());
                     }
                 });
                 html_page.push_str("</div><br>");
@@ -197,9 +218,9 @@ body {
 
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();
-    if args.len() == 2 && args[1] == String::from("--gen-page") {
-        gen_page();
-    } else {
+    if args.len() == 3 && args[2] == String::from("--gen-page") {
+        gen_page(args[1].as_str());
+    } else if args.len() == 2 {
         let mut state = input::State::AddingText;
         let mut buffer = String::new();
         buffer.push('\u{2016}');
@@ -212,6 +233,37 @@ fn main() {
         let mut terminal = Terminal::new(backend).unwrap();
         let stdin_channel = input::spawn_stdin_channel();
         let mut update_ui = true;
+        let key = new_magic_crypt!(args[1].as_str(), 128);
+
+        let mut file = match OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(false)
+            .open("database.json")
+        {
+            Ok(mut file) => {
+                let verifier: Vec<u8> = bincode::deserialize_from(&mut file).unwrap();
+                let verifier = match key.decrypt_bytes_to_bytes(verifier.as_slice()){
+                    Ok(string) => string,
+                    Err(_) => panic!("Wrong password!"),
+                };
+                let verifier: String = std::str::from_utf8(verifier.as_slice()).unwrap().to_string();
+                if verifier != String::from("917994806418") {
+                    panic!("Incorrect password for this database! Exiting")
+                } else {
+                    file
+                }
+            }
+            Err(_) => {
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .open("database.json")
+                    .unwrap();
+                bincode::serialize_into(&mut file, &key.encrypt_str_to_bytes(String::from("917994806418"))).unwrap();
+                file
+            }
+        };
 
         'main: loop {
             match stdin_channel.try_recv() {
@@ -239,7 +291,7 @@ fn main() {
                         match std::fs::File::open(buffer.clone()) {
                             Ok(mut file) => {
                                 let mut buff = Vec::new();
-                                let f_type: String;
+                                let f_type: FileType;
                                 let desc: String = buffer.split('/').last().unwrap().to_string();
                                 if buffer.ends_with(".png")
                                     || buffer.ends_with(".apng")
@@ -250,11 +302,19 @@ fn main() {
                                     || buffer.ends_with(".webp")
                                     || buffer.ends_with(".avif")
                                 {
-                                    f_type = String::from("image");
+                                    f_type = FileType::Image;
+                                } else if buffer.ends_with(".mp3")
+                                    || buffer.ends_with(".wav")
+                                    || buffer.ends_with(".ogg")
+                                    || buffer.ends_with(".webm")
+                                {
+                                    f_type = FileType::Audio;
                                 } else {
-                                    f_type = String::from("file");
+                                    f_type = FileType::GenericFile;
                                 }
                                 file.read_to_end(&mut buff).unwrap();
+                                let buff = key.encrypt_bytes_to_bytes(buff.as_slice());
+
                                 curr_files.push(File {
                                     data: buff,
                                     description: desc,
@@ -281,7 +341,12 @@ fn main() {
                 }
                 Ok(input::Data::Command(input::SignalType::Cancel)) => {
                     if state == input::State::AddingFile {
-                        append_entry(content_text.clone(), curr_files);
+                        append_entry(
+                            content_text.clone(),
+                            curr_files,
+                            &mut file,
+                            args[1].as_str(),
+                        );
                         break 'main;
                     } else if state == input::State::Popup {
                         state = input::State::AddingFile;
@@ -315,8 +380,7 @@ fn main() {
             }
             thread::sleep(std::time::Duration::from_millis(20));
         }
+    } else {
+        println!("Expected password. Usage: diary [password] [optional --gen-page]");
     }
 }
-// fn main() {
-// append_entry();
-// }
