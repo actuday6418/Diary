@@ -19,11 +19,10 @@ FLAGS:
 
 OPTIONS:
     -d, --database <database>    This is the location of the database file. [default: .database]
-    -p, --password <password>    This is the password to the database.
 ```
 
 ## To make an entry
-1. Run the program with the password and optionally the database options. 
+1. Run the program and enter your password. 
 2. On the first screen, enter the day's diary entry. The date and day will be added by Diary. 
 3. Esc saves the entry and exits. ```Ctrl+c``` exits the application without saving. ```Alt+n``` takes you to the next screen for adding files.
 4. To add files, simply type in the file's location. After each file, hit ```Alt+n```. If the file doesn't exist, you get an alert.
@@ -31,7 +30,8 @@ OPTIONS:
   
 ## To view the diary in HTML
 1. Run the program with the ```-g``` (```--generate-page```) flag.
-2. "index.html" and other required files are now saved to ```/tmp```. Open this file with a browser. 
+2. Enter your password.
+3. "index.html" and other required files are now saved to ```/tmp```. Open this file with a browser. 
   ```firefox /tmp/index.html```
  
 # Important notes
