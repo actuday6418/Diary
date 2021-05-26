@@ -17,11 +17,12 @@ pub enum Data {
     Char(char),
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum State {
+    AddingPassword,
     AddingText,
     AddingFile,
-    Popup,
+    Popup(Box<State>),
 }
 
 pub fn spawn_stdin_channel() -> Receiver<Data> {

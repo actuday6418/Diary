@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::io::Read;
+use std::io::{Read, Write};
 #[macro_use]
 extern crate magic_crypt;
 
@@ -17,18 +17,22 @@ use clap::{App, Arg};
 
 fn main() {
     let matches = App::new("Diary").version("0.1.1")
-      .arg(Arg::with_name("password").short("p").long("password").required(true).takes_value(true).help("This is the password to the database."))
       .arg(Arg::with_name("database").short("d").long("database").default_value(".database").takes_value(true).help("This is the location of the database file."))
       .arg(Arg::with_name("generate-page").long("generate-page").short("g").help("Assert this flag if you want the diary to built into an html file stored at $TEMPDIR.")).get_matches();
-    let password = matches.value_of("password").unwrap();
     let database_loc = matches.value_of("database").unwrap();
     if matches.is_present("generate-page") {
-        db_ops::gen_page(password, database_loc);
+        let mut password = String::new();
+        print!("Enter the database's password: ");
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut password).unwrap();
+        password = password.trim().to_string();
+        db_ops::gen_page(password.as_str(), database_loc);
     } else {
-        let mut state = input::State::AddingText;
+        let mut state = input::State::AddingPassword;
         let mut buffer = String::new();
         buffer.push('\u{2016}');
         let mut content_text = String::from("Null");
+        let mut password = String::from("Null");
         let mut curr_files: Vec<db_ops::File> = Vec::new();
         let stdout = std::io::stdout().into_raw_mode().unwrap();
         let stdout = MouseTerminal::from(stdout);
@@ -37,48 +41,35 @@ fn main() {
         let mut terminal = Terminal::new(backend).unwrap();
         let stdin_channel = input::spawn_stdin_channel();
         let mut update_ui = true;
-        let key = new_magic_crypt!(password, 128);
+        let mut key = new_magic_crypt!(password.clone(), 128);
 
+        let db_exists: bool;
         let mut file = match OpenOptions::new()
             .write(true)
-            .read(true)
             .create(false)
             .open(database_loc)
         {
-            Ok(mut file) => {
-                let verifier: Vec<u8> = bincode::deserialize_from(&mut file).unwrap();
-                let verifier = match key.decrypt_bytes_to_bytes(verifier.as_slice()) {
-                    Ok(string) => string,
-                    Err(_) => panic!("Wrong password!"),
-                };
-                let verifier: String = std::str::from_utf8(verifier.as_slice())
-                    .unwrap()
-                    .to_string();
-                if verifier != String::from("917994806418") {
-                    panic!("Incorrect password for this database! Exiting")
-                } else {
-                    file
-                }
+            Ok(file) => {
+                db_exists = true;
+                file
             }
             Err(_) => {
-                let mut file = OpenOptions::new()
+                db_exists = false;
+                OpenOptions::new()
                     .write(true)
                     .create(true)
                     .open(database_loc)
-                    .unwrap();
-                bincode::serialize_into(
-                    &mut file,
-                    &key.encrypt_str_to_bytes(String::from("917994806418")),
-                )
-                .unwrap();
-                file
+                    .unwrap()
             }
         };
 
         'main: loop {
             match stdin_channel.try_recv() {
                 Ok(input::Data::Char(c)) => {
-                    if state == input::State::AddingFile || state == input::State::AddingText {
+                    if state == input::State::AddingFile
+                        || state == input::State::AddingText
+                        || state == input::State::AddingPassword
+                    {
                         buffer.pop();
                         buffer.push(c);
                         buffer.push('\u{2016}');
@@ -92,10 +83,63 @@ fn main() {
                     if state == input::State::AddingText {
                         buffer.pop();
                         state = input::State::AddingFile;
-                        //append_entry(buffer.clone(), curr_files.clone());
                         content_text = buffer.clone();
                         buffer.clear();
                         update_ui = true;
+                    } else if state == input::State::AddingPassword {
+                        buffer.pop();
+                        state = input::State::AddingText;
+                        password = buffer.clone();
+                        buffer.clear();
+                        update_ui = true;
+                        key = new_magic_crypt!(password.clone(), 128);
+
+                        file = match db_exists {
+                            false => {
+                                let mut file = OpenOptions::new()
+                                    .write(true)
+                                    .create(false)
+                                    .open(database_loc)
+                                    .unwrap();
+                                bincode::serialize_into(
+                                    &mut file,
+                                    &key.encrypt_str_to_bytes(String::from("917994806418")),
+                                )
+                                .unwrap();
+                                file
+                            }
+                            true => {
+                                let mut file = OpenOptions::new()
+                                    .write(true)
+                                    .read(true)
+                                    .create(false)
+                                    .open(database_loc)
+                                    .unwrap();
+                                let verifier: Vec<u8> =
+                                    bincode::deserialize_from(&mut file).unwrap();
+                                match key.decrypt_bytes_to_bytes(verifier.as_slice()) {
+                                    Ok(string) => {
+                                        let verifier: String =
+                                            std::str::from_utf8(string.as_slice())
+                                                .unwrap()
+                                                .to_string();
+                                        if verifier != String::from("917994806418") {
+                                            state = input::State::Popup(Box::new(
+                                                input::State::AddingPassword,
+                                            ));
+                                            buffer = String::from("Incorrect password! Hit Ctrl+c to exit, Esc to try again!");
+                                        }
+                                    }
+                                    Err(_) => {
+                                        state = input::State::Popup(Box::new(
+                                            input::State::AddingPassword,
+                                        ));
+                                        buffer = String::from("Incorrect password! Hit Ctrl+c to exit, Esc to try again!");
+                                    }
+                                }
+                                file
+                            }
+                        };
                     } else if state == input::State::AddingFile {
                         buffer.pop();
                         match std::fs::File::open(buffer.clone()) {
@@ -135,39 +179,59 @@ fn main() {
                             }
                             Err(_) => {
                                 buffer = String::from(format!("{}: File not found!", buffer));
-                                state = input::State::Popup;
+                                state = input::State::Popup(Box::new(input::State::AddingFile));
                                 update_ui = true;
                             }
                         }
                     }
                 }
                 Ok(input::Data::Command(input::SignalType::BackSpace)) => {
-                    if state == input::State::AddingFile || state == input::State::AddingText {
+                    if state == input::State::AddingFile
+                        || state == input::State::AddingText
+                        || state == input::State::AddingPassword
+                    {
                         buffer.pop();
                         buffer.pop();
                         buffer.push('\u{2016}');
                         update_ui = true;
                     }
                 }
-                Ok(input::Data::Command(input::SignalType::Cancel)) => {
-                    if state == input::State::AddingFile {
-                        db_ops::append_entry(content_text.clone(), curr_files, &mut file, password);
-                        break 'main;
-                    } else if state == input::State::Popup {
-                        state = input::State::AddingFile;
-                        update_ui = true;
-                        buffer.clear();
-                    } else if state == input::State::AddingText {
-                        db_ops::append_entry(content_text.clone(), curr_files, &mut file, password);
+                Ok(input::Data::Command(input::SignalType::Cancel)) => match state {
+                    input::State::AddingFile => {
+                        db_ops::append_entry(
+                            content_text.clone(),
+                            curr_files,
+                            &mut file,
+                            password.as_str(),
+                        );
                         break 'main;
                     }
-                }
+                    input::State::Popup(prev_state) => {
+                        state = Box::leak(prev_state).clone();
+                        update_ui = true;
+                        buffer.clear();
+                    }
+                    input::State::AddingText => {
+                        db_ops::append_entry(
+                            content_text.clone(),
+                            curr_files,
+                            &mut file,
+                            password.as_str(),
+                        );
+                        break 'main;
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
             if update_ui {
                 update_ui = false;
                 terminal
                     .draw(|f| match state {
+                        input::State::AddingPassword => {
+                            let widget = ui::build_password_entry(buffer.as_str());
+                            f.render_widget(widget, f.size());
+                        }
                         input::State::AddingText => {
                             let widget_main = ui::build_main(buffer.as_str());
                             f.render_widget(widget_main, f.size());
@@ -176,7 +240,7 @@ fn main() {
                             let widget = ui::build_file_input(buffer.as_str());
                             f.render_widget(widget, f.size());
                         }
-                        input::State::Popup => {
+                        input::State::Popup(_) => {
                             let popup = popup::centered_rect(40, 10, f.size());
 
                             let widget_input = ui::build_message(buffer.as_str());

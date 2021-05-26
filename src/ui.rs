@@ -46,3 +46,19 @@ pub fn build_message(content: &str) -> Paragraph {
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false })
 }
+
+pub fn build_password_entry(content: &str) -> Paragraph {
+    Paragraph::new(content)
+        .style(Style::default())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default())
+                .title(Span::styled(
+                    "Enter your password and then hit Alt+n, Ctrl+c exits",
+                    Style::default(),
+                )),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false })
+}

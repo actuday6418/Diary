@@ -60,12 +60,12 @@ fn get_month(month_no: u64) -> String {
 }
 
 fn get_date_suffix(date: u64) -> String {
-  String::from(match date {
-    1 => "st",
-    2 => "nd",
-    3 => "rd",
-    _ => "th"
-  })
+    String::from(match date {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th",
+    })
 }
 
 pub fn append_entry(content: String, files: Vec<File>, file: &mut std::fs::File, password: &str) {
@@ -199,7 +199,7 @@ body {
                         entry.year,
                         std::str::from_utf8(
                             key.decrypt_bytes_to_bytes(&entry.content.clone())
-                                .unwrap()
+                                .expect("Incorrect password!")
                                 .as_slice()
                         )
                         .unwrap()
