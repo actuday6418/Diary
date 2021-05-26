@@ -10,7 +10,7 @@ Diary is a TUI program written in Rust for GNU/Linux / \*BSD / Android  (It prob
 # Usage 
 ```
 USAGE:
-    diary [FLAGS] [OPTIONS] --password <password>
+    diary [FLAGS] [OPTIONS]
 
 FLAGS:
     -g, --generate-page    Assert this flag if you want the diary to built into an html file stored at $TEMPDIR.
