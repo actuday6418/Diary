@@ -1,5 +1,5 @@
-# Diary [![Latest version]][crates.io]
-Encrypted memories
+# Diary - Encrypted memories [![Latest version]][crates.io]
+Diary is a TUI program written in Rust for GNU/Linux / \*BSD / Android  (It probably works on other platforms too, but who cares) that helps you write a digital journal from the comfort of a TUI. It ecrypts both text and file data, and can decrypt and build a rich HTML representation of your diary when required.
 
 [Latest Version]: https://img.shields.io/crates/v/diary.svg
 [crates.io]: https://crates.io/crates/diary
@@ -44,3 +44,7 @@ OPTIONS:
 1. AES-128 encryption for text and file data.
 2. TUI interface without sacrificing functionality or usability
 3. Decrypts the whole database only when required (```-g``` flag), and into rich HTML5.
+
+# Running
+
+https://user-images.githubusercontent.com/56124831/119493025-5d5efd00-bd7d-11eb-93bf-3178bf35d821.mp4
