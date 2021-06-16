@@ -4,6 +4,9 @@ Diary is a TUI program written in Rust for GNU/Linux / \*BSD / Android  (It prob
 [Latest Version]: https://img.shields.io/crates/v/diary.svg
 [crates.io]: https://crates.io/crates/diary
 
+# Request features
+Would like Diary to have a new feature? Simply create a new issue describing it, and I'll try and address it over the next day.
+
 # Install
 ```cargo install diary```
 
